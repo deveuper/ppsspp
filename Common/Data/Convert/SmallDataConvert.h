@@ -206,6 +206,12 @@ inline bool InvertMatrix4x4(float out[16], const float in[16]) {
 		0.0f, 0.0f, 0.0f, 1.0f,
 	};
 
+	// NaN/Inf guard: if any element is not finite, fail early.
+	for (int j = 0; j < 16; j++) {
+		if (!std::isfinite(temp[j]))
+			return false;
+	}
+
 	for (int i = 0; i < 4; i++) {
 		// Find pivot (largest absolute value in current column from row i).
 		float maxVal = fabsf(temp[i * 4 + i]);
