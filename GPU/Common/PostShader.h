@@ -49,6 +49,8 @@ struct ShaderInfo {
 	bool requires60fps;
 	// Takes previous frame as input (for blending effects.)
 	bool usePreviousFrame;
+	// Binds the depth buffer as sampler3 for post-processing (e.g., SSAO).
+	bool useDepthBuffer;
 
 	struct Setting {
 		std::string name;

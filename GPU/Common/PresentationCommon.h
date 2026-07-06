@@ -36,6 +36,7 @@ struct PostShaderUniforms {
 	float setting[4];
 	float video; float pad[3];
 	float vr;
+	float invProjection[16];
 	// Used on Direct3D9.
 	float gl_HalfPixel[4];
 };
@@ -129,6 +130,10 @@ public:
 	void SourceTexture(Draw::Texture *texture, int bufferWidth, int bufferHeight);
 	void SourceFramebuffer(Draw::Framebuffer *fb, int bufferWidth, int bufferHeight);
 
+	void SetDepthSourceFramebuffer(Draw::Framebuffer *fb) {
+		depthSourceFramebuffer_ = fb;
+	}
+
 	void RunPostshaderPasses(const DisplayLayoutConfig &config, OutputFlags flags, int uvRotation, float u0, float v0, float u1, float v1);
 	void CopyToOutput(const DisplayLayoutConfig &config);
 
@@ -174,6 +179,7 @@ protected:
 
 	Draw::Texture *srcTexture_ = nullptr;
 	Draw::Framebuffer *srcFramebuffer_ = nullptr;
+	Draw::Framebuffer *depthSourceFramebuffer_ = nullptr;
 	int srcWidth_ = 0;
 	int srcHeight_ = 0;
 	bool hasVideo_ = false;

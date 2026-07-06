@@ -37,6 +37,7 @@
 #include "GPU/Common/PresentationCommon.h"
 #include "GPU/GPUState.h"
 #include "Common/GPU/ShaderTranslation.h"
+#include "Common/Data/Convert/SmallDataConvert.h"
 
 struct Vertex {
 	float x, y, z;
@@ -244,6 +245,41 @@ void PresentationCommon::CalculatePostShaderUniforms(int bufferWidth, int buffer
 	uniforms->video = hasVideo_ ? 1.0f : 0.0f;
 	uniforms->vr = IsVREnabled() && IsBigScreenVRMode() ? 1.0f : 0.0f;
 
+	if (shaderInfo->useDepthBuffer) {
+		float invProj[16];
+		bool invertible = InvertMatrix4x4(invProj, gstate.projMatrix);
+		if (invertible) {
+			// NDC correction: OpenGL (GLSL_1xx/GLSL_3xx) has NDC z in [-1,1],
+			// but depth texture values are in [0,1]. We bake the mapping into the
+			// inverse projection so shaders always use ndcZ = depth (zero branch).
+			// The correction matrix maps z: [0,1] -> [-1,1] pre-multiplied into invProj.
+			if (ShaderLanguageIsOpenGL(lang_)) {
+				for (int i = 0; i < 4; i++) {
+					float col2 = invProj[i * 4 + 2];
+					float col3 = invProj[i * 4 + 3];
+					invProj[i * 4 + 2] = col2 * 2.0f;
+					invProj[i * 4 + 3] = -col2 + col3;
+				}
+			}
+			// D3D11/Vulkan: NDC z is already [0,1], no correction needed.
+			memcpy(uniforms->invProjection, invProj, sizeof(float) * 16);
+		} else {
+			// Singular matrix — fill identity as fallback.
+			memset(uniforms->invProjection, 0, sizeof(float) * 16);
+			uniforms->invProjection[0] = 1.0f;
+			uniforms->invProjection[5] = 1.0f;
+			uniforms->invProjection[10] = 1.0f;
+			uniforms->invProjection[15] = 1.0f;
+		}
+	} else {
+		// Not a depth shader, fill identity.
+		memset(uniforms->invProjection, 0, sizeof(float) * 16);
+		uniforms->invProjection[0] = 1.0f;
+		uniforms->invProjection[5] = 1.0f;
+		uniforms->invProjection[10] = 1.0f;
+		uniforms->invProjection[15] = 1.0f;
+	}
+
 	// The shader translator tacks this onto our shaders, if we don't set it they render garbage.
 	uniforms->gl_HalfPixel[0] = u_pixel_delta * 0.5f;
 	uniforms->gl_HalfPixel[1] = v_pixel_delta * 0.5f;
@@ -371,6 +407,7 @@ bool PresentationCommon::CompilePostShader(const ShaderInfo *shaderInfo, Draw::P
 		{ "u_setting", 5, 5, UniformType::FLOAT4, offsetof(PostShaderUniforms, setting) },
 		{ "u_video", 6, 6, UniformType::FLOAT1, offsetof(PostShaderUniforms, video) },
 		{ "u_vr", 7, 7, UniformType::FLOAT1, offsetof(PostShaderUniforms, vr) },
+		{ "u_invProjection", 8, 8, UniformType::MATRIX4X4, offsetof(PostShaderUniforms, invProjection) },
 	} };
 
 	Draw::Pipeline *pipeline = CreatePipeline({ vs, fs }, true, &postShaderDesc);
@@ -582,6 +619,7 @@ void PresentationCommon::DestroyPostShader() {
 	DoReleaseVector(previousFramebuffers_);
 	postShaderInfo_.clear();
 	postShaderFBOUsage_.clear();
+	depthSourceFramebuffer_ = nullptr;
 }
 
 void PresentationCommon::DestroyStereoShader() {
@@ -802,6 +840,8 @@ void PresentationCommon::RunPostshaderPasses(const DisplayLayoutConfig &config, 
 		BindSource(1, false);
 		if (shaderInfo->usePreviousFrame)
 			draw_->BindFramebufferAsTexture(previousFramebuffer, 2, Draw::Aspect::COLOR_BIT, 0);
+		if (shaderInfo->useDepthBuffer && depthSourceFramebuffer_)
+			draw_->BindFramebufferAsTexture(depthSourceFramebuffer_, 3, Draw::Aspect::DEPTH_BIT, 0);
 
 		int nextWidth, nextHeight;
 		draw_->GetFramebufferDimensions(postShaderFramebuffer, &nextWidth, &nextHeight);
@@ -820,6 +860,8 @@ void PresentationCommon::RunPostshaderPasses(const DisplayLayoutConfig &config, 
 		draw_->BindSamplerStates(1, 1, &sampler);
 		if (shaderInfo->usePreviousFrame)
 			draw_->BindSamplerStates(2, 1, &sampler);
+		if (shaderInfo->useDepthBuffer)
+			draw_->BindSamplerStates(3, 1, &sampler);
 
 		draw_->BindVertexBuffer(vdata_, vertsOffset);
 		draw_->Draw(4, 0);

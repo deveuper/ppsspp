@@ -192,6 +192,69 @@ inline void CopyMatrix4x4(float dest[16], const float src[16]) {
 	memcpy(dest, src, sizeof(float) * 16);
 }
 
+// Invert a 4x4 column-major matrix using Gauss-Jordan elimination.
+// Returns false if the matrix is singular (not invertible).
+// Out-of-place: 'out' and 'in' may point to the same memory.
+inline bool InvertMatrix4x4(float out[16], const float in[16]) {
+	float temp[16];
+	memcpy(temp, in, sizeof(float) * 16);
+
+	float inv[16] = {
+		1.0f, 0.0f, 0.0f, 0.0f,
+		0.0f, 1.0f, 0.0f, 0.0f,
+		0.0f, 0.0f, 1.0f, 0.0f,
+		0.0f, 0.0f, 0.0f, 1.0f,
+	};
+
+	for (int i = 0; i < 4; i++) {
+		// Find pivot (largest absolute value in current column from row i).
+		float maxVal = fabsf(temp[i * 4 + i]);
+		int maxRow = i;
+		for (int k = i + 1; k < 4; k++) {
+			float val = fabsf(temp[k * 4 + i]);
+			if (val > maxVal) {
+				maxVal = val;
+				maxRow = k;
+			}
+		}
+		if (maxVal < 1e-10f)
+			return false;  // Singular
+
+		// Swap rows in temp and inv.
+		if (maxRow != i) {
+			for (int j = 0; j < 4; j++) {
+				float tmp = temp[i * 4 + j];
+				temp[i * 4 + j] = temp[maxRow * 4 + j];
+				temp[maxRow * 4 + j] = tmp;
+
+				tmp = inv[i * 4 + j];
+				inv[i * 4 + j] = inv[maxRow * 4 + j];
+				inv[maxRow * 4 + j] = tmp;
+			}
+		}
+
+		// Normalize pivot row.
+		float pivot = temp[i * 4 + i];
+		for (int j = 0; j < 4; j++) {
+			temp[i * 4 + j] /= pivot;
+			inv[i * 4 + j] /= pivot;
+		}
+
+		// Eliminate all other rows.
+		for (int k = 0; k < 4; k++) {
+			if (k == i) continue;
+			float factor = temp[k * 4 + i];
+			for (int j = 0; j < 4; j++) {
+				temp[k * 4 + j] -= factor * temp[i * 4 + j];
+				inv[k * 4 + j] -= factor * inv[i * 4 + j];
+			}
+		}
+	}
+
+	memcpy(out, inv, sizeof(float) * 16);
+	return true;
+}
+
 // WARNING: This can quietly "over-load" src by 4 bytes.
 inline void ExpandFloat24x3ToFloat4(float dest[4], const uint32_t src[3]) {
 #ifdef _M_SSE

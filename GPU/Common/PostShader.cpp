@@ -165,6 +165,7 @@ void LoadPostShaderInfo(Draw::DrawContext *draw, const std::vector<Path> &direct
 					section.Get("SSAA", &info.SSAAFilterLevel);
 					section.Get("60fps", &info.requires60fps);
 					section.Get("UsePreviousFrame", &info.usePreviousFrame);
+					section.Get("UseDepthBuffer", &info.useDepthBuffer);
 
 					if (info.parent == "Off")
 						info.parent.clear();

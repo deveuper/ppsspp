@@ -412,6 +412,11 @@ public:
 		return currentRenderVfb_;
 	}
 
+	// Returns the current depth framebuffer (same FBO as render VFB, accessed via DEPTH_BIT aspect).
+	Draw::Framebuffer *GetCurrentDepthFramebuffer() const {
+		return currentRenderVfb_ ? currentRenderVfb_->fbo : nullptr;
+	}
+
 	// This only checks for the color channel, and if there are multiple overlapping ones
 	// with different color depth, this might get things wrong.
 	// DEPRECATED FOR NEW USES - avoid whenever possible.
